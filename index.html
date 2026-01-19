@@ -64,7 +64,20 @@
 
       slider.max = (data.duration || 0).toFixed(3);
 
-      const bounds = data.bounds;
+      const bounds = getFieldBounds(data);
+
+      function getFieldBounds(data){
+        const hw = (data.fieldWidth || 70) * 0.5;
+        const hl = (data.fieldLength || 100) * 0.5;
+        const cx = data.fieldCenterX || 0;
+        const cy = data.fieldCenterY || 0;
+        return {
+          minX: cx - hw,
+          maxX: cx + hw,
+          minY: cy - hl,
+          maxY: cy + hl
+        };
+      }
 
       function worldToCanvas(x,y){
         const b = bounds;

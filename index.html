@@ -21,6 +21,7 @@
     <div class="controls">
       <button id="play">▶︎</button>
       <button id="pause">⏸</button>
+      <button id="reset">↺</button>
       <input id="slider" type="range" min="0" max="0" step="0.02" value="0" />
       <div class="time" id="timeLabel">0.00s</div>
     </div>
@@ -56,6 +57,7 @@
       const timeLabel = document.getElementById('timeLabel');
       const playBtn = document.getElementById('play');
       const pauseBtn = document.getElementById('pause');
+      const resetBtn = document.getElementById('reset');
       let isPlaying = false;
       let rafId = null;
       let playStart = 0;
@@ -184,6 +186,13 @@
         isPlaying = false;
         if (rafId) cancelAnimationFrame(rafId);
         rafId = null;
+      });
+      resetBtn.addEventListener('click', ()=>{
+        isPlaying = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        slider.value = 0;
+        drawFrame(0);
       });
 
       drawFrame(0);

@@ -57,8 +57,8 @@
       const playBtn = document.getElementById('play');
       const pauseBtn = document.getElementById('pause');
       let isPlaying = false;
-      let lastTime = null;
       let rafId = null;
+      let playStart = 0;
       const ballImg = new Image();
       if (data.ballImageBase64){ ballImg.src = 'data:image/png;base64,' + data.ballImageBase64; }
 
@@ -145,22 +145,26 @@
 
       function tick(ts){
         if (!isPlaying) return;
-        if (lastTime === null) lastTime = ts;
-        const dt = (ts - lastTime) / 1000;
-        lastTime = ts;
-        let t = parseFloat(slider.value) + dt;
+        let t = (ts - playStart) / 1000;
         if (t > data.duration){ t = data.duration; isPlaying = false; }
         slider.value = t;
         drawFrame(t);
         if (isPlaying) rafId = requestAnimationFrame(tick);
       }
 
-      slider.addEventListener('input', ()=>{ drawFrame(parseFloat(slider.value)); });
+      slider.addEventListener('input', ()=>{
+        isPlaying = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        drawFrame(parseFloat(slider.value));
+      });
       playBtn.addEventListener('click', ()=>{
-        if (parseFloat(slider.value) >= data.duration) slider.value = 0;
+        const current = parseFloat(slider.value) || 0;
+        const clamped = current >= data.duration ? 0 : current;
+        slider.value = clamped;
         if (rafId) cancelAnimationFrame(rafId);
         isPlaying = true;
-        lastTime = null;
+        playStart = performance.now() - (parseFloat(slider.value) * 1000);
         rafId = requestAnimationFrame(tick);
       });
       pauseBtn.addEventListener('click', ()=>{
@@ -171,7 +175,8 @@
 
       drawFrame(0);
       isPlaying = true;
-      requestAnimationFrame(tick);
+      playStart = performance.now();
+      rafId = requestAnimationFrame(tick);
     }
   </script>
 </body>

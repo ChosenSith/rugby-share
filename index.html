@@ -45,7 +45,12 @@
     }
 
     function initViewer(data) {
+      const aspect = (data.fieldLength && data.fieldWidth) ? (data.fieldLength / data.fieldWidth) : (600 / 900);
       const canvas = document.getElementById('field');
+      const container = document.querySelector('.container');
+      const maxWidth = Math.min(container.clientWidth, 1000);
+      canvas.width = Math.max(300, Math.floor(maxWidth));
+      canvas.height = Math.max(200, Math.floor(canvas.width * aspect));
       const ctx = canvas.getContext('2d');
       const slider = document.getElementById('slider');
       const timeLabel = document.getElementById('timeLabel');
@@ -92,11 +97,10 @@
         ctx.fillRect(0,0,canvas.width,canvas.height);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.strokeRect(5,5,canvas.width-10,canvas.height-10);
         const hw = data.fieldWidth * 0.5;
         const hl = data.fieldLength * 0.5;
         const cx = data.fieldCenterX; const cy = data.fieldCenterY;
-        const linesY = [cy, cy + 22, cy - 22, cy + (hl - 5), cy - (hl - 5)];
+        const linesY = [cy, cy + 22, cy - 22, cy + (hl - 5), cy - (hl - 5), cy + hl, cy - hl];
         linesY.forEach(y=>{
           const p1 = worldToCanvas(cx - hw, y);
           const p2 = worldToCanvas(cx + hw, y);
@@ -140,8 +144,12 @@
         });
         const ballPt = worldToCanvas(frame.ballX, frame.ballY);
         if (ballImg.complete && ballImg.naturalWidth){
-          const size = 18;
-          ctx.drawImage(ballImg, ballPt.x - size/2, ballPt.y - size/2, size, size);
+          const scale = ballPt.scale;
+          const worldW = data.ballWorldWidth || 1;
+          const worldH = data.ballWorldHeight || 1;
+          const widthPx = worldW * scale;
+          const heightPx = worldH * scale;
+          ctx.drawImage(ballImg, ballPt.x - widthPx/2, ballPt.y - heightPx/2, widthPx, heightPx);
         } else {
           ctx.beginPath();
           ctx.fillStyle = '#ffb000';
@@ -164,7 +172,10 @@
       }
 
       slider.addEventListener('input', ()=>{ drawFrame(parseFloat(slider.value)); });
-      playBtn.addEventListener('click', ()=>{ if (!isPlaying){ isPlaying = true; lastTime = null; requestAnimationFrame(tick);} });
+      playBtn.addEventListener('click', ()=>{
+        if (parseFloat(slider.value) >= data.duration) slider.value = 0;
+        if (!isPlaying){ isPlaying = true; lastTime = null; requestAnimationFrame(tick); }
+      });
       pauseBtn.addEventListener('click', ()=>{ isPlaying = false; });
 
       drawFrame(0);

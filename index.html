@@ -58,29 +58,13 @@
       const pauseBtn = document.getElementById('pause');
       let isPlaying = false;
       let lastTime = null;
+      let rafId = null;
       const ballImg = new Image();
       if (data.ballImageBase64){ ballImg.src = 'data:image/png;base64,' + data.ballImageBase64; }
 
       slider.max = (data.duration || 0).toFixed(3);
 
-      const bounds = getFieldBounds(data);
-
-      function getFieldBounds(data){
-        if (data && data.fieldWidth && data.fieldLength){
-          const hw = data.fieldWidth * 0.5;
-          const hl = data.fieldLength * 0.5;
-          const cx = data.fieldCenterX || 0;
-          const cy = data.fieldCenterY || 0;
-          const padding = 5;
-          return {
-            minX: cx - hw - padding,
-            maxX: cx + hw + padding,
-            minY: cy - hl - padding,
-            maxY: cy + hl + padding
-          };
-        }
-        return data.bounds;
-      }
+      const bounds = data.bounds;
 
       function worldToCanvas(x,y){
         const b = bounds;
@@ -168,15 +152,22 @@
         if (t > data.duration){ t = data.duration; isPlaying = false; }
         slider.value = t;
         drawFrame(t);
-        if (isPlaying) requestAnimationFrame(tick);
+        if (isPlaying) rafId = requestAnimationFrame(tick);
       }
 
       slider.addEventListener('input', ()=>{ drawFrame(parseFloat(slider.value)); });
       playBtn.addEventListener('click', ()=>{
         if (parseFloat(slider.value) >= data.duration) slider.value = 0;
-        if (!isPlaying){ isPlaying = true; lastTime = null; requestAnimationFrame(tick); }
+        if (rafId) cancelAnimationFrame(rafId);
+        isPlaying = true;
+        lastTime = null;
+        rafId = requestAnimationFrame(tick);
       });
-      pauseBtn.addEventListener('click', ()=>{ isPlaying = false; });
+      pauseBtn.addEventListener('click', ()=>{
+        isPlaying = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      });
 
       drawFrame(0);
       isPlaying = true;

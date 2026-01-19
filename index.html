@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Partage</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#0e5a1d;color:#fff;margin:0;padding:16px;}
+    .container{max-width:1000px;margin:0 auto;}
+    canvas{background:#2a8f3a;border:2px solid #fff;border-radius:8px;width:100%;height:auto;display:block;}
+    .controls{margin-top:12px;display:flex;gap:8px;align-items:center;}
+    input[type=range]{flex:1;}
+    .time{min-width:90px;text-align:right;font-variant-numeric:tabular-nums;}
+    .hint{margin-top:12px;color:#fff;opacity:0.9;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 id="title">Combinaison</h2>
+    <canvas id="field" width="900" height="600"></canvas>
+    <div class="controls">
+      <button id="play">▶︎</button>
+      <button id="pause">⏸</button>
+      <input id="slider" type="range" min="0" max="0" step="0.02" value="0" />
+      <div class="time" id="timeLabel">0.00s</div>
+    </div>
+    <div class="hint" id="hint"></div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const dataUrl = params.get("data");
+    const title = params.get("title") || "Combinaison";
+    const hint = document.getElementById("hint");
+    document.getElementById("title").textContent = title;
+
+    if (!dataUrl) {
+      hint.textContent = "Aucune donnée fournie. Vérifie le lien de partage.";
+    } else {
+      fetch(dataUrl)
+        .then(r => r.json())
+        .then(data => initViewer(data))
+        .catch(() => {
+          hint.textContent = "Impossible de charger la combinaison.";
+        });
+    }
+
+    function initViewer(data) {
+      const canvas = document.getElementById('field');
+      const ctx = canvas.getContext('2d');
+      const slider = document.getElementById('slider');
+      const timeLabel = document.getElementById('timeLabel');
+      const playBtn = document.getElementById('play');
+      const pauseBtn = document.getElementById('pause');
+      let isPlaying = false;
+      let lastTime = null;
+      const ballImg = new Image();
+      if (data.ballImageBase64){ ballImg.src = 'data:image/png;base64,' + data.ballImageBase64; }
+
+      slider.max = (data.duration || 0).toFixed(3);
+
+      function worldToCanvas(x,y){
+        const b = data.bounds;
+        const w = b.maxX - b.minX;
+        const h = b.maxY - b.minY;
+        const scale = Math.min(canvas.width / w, canvas.height / h);
+        const cx = (x - b.minX) * scale;
+        const cy = canvas.height - (y - b.minY) * scale;
+        return {x: cx, y: cy, scale};
+      }
+
+      function drawField(){
+        ctx.fillStyle = '#2a8f3a';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(5,5,canvas.width-10,canvas.height-10);
+        const hw = data.fieldWidth * 0.5;
+        const hl = data.fieldLength * 0.5;
+        const cx = data.fieldCenterX; const cy = data.fieldCenterY;
+        const linesY = [cy, cy + 22, cy - 22, cy + (hl - 5), cy - (hl - 5)];
+        linesY.forEach(y=>{
+          const p1 = worldToCanvas(cx - hw, y);
+          const p2 = worldToCanvas(cx + hw, y);
+          ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+        });
+        const left = worldToCanvas(cx - hw, cy - hl);
+        const right = worldToCanvas(cx + hw, cy + hl);
+        ctx.beginPath(); ctx.moveTo(left.x,left.y); ctx.lineTo(left.x,right.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(right.x,left.y); ctx.lineTo(right.x,right.y); ctx.stroke();
+      }
+
+      function getFrameAtTime(t){
+        let lo = 0, hi = data.frames.length - 1;
+        while (lo < hi){
+          const mid = Math.floor((lo + hi) / 2);
+          if (data.frames[mid].t >= t) hi = mid; else lo = mid + 1;
+        }
+        return data.frames[lo] || data.frames[data.frames.length - 1];
+      }
+
+      function drawFrame(t){
+        const frame = getFrameAtTime(t);
+        if (!frame) return;
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        drawField();
+        const playersById = new Map();
+        frame.players.forEach(p=>playersById.set(p.id,p));
+        data.players.forEach(p=>{
+          const pos = playersById.get(p.id);
+          if (!pos) return;
+          const pt = worldToCanvas(pos.x,pos.y);
+          ctx.beginPath();
+          ctx.fillStyle = p.colorHex;
+          ctx.arc(pt.x, pt.y, 10, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(''+p.id, pt.x, pt.y);
+        });
+        const ballPt = worldToCanvas(frame.ballX, frame.ballY);
+        if (ballImg.complete && ballImg.naturalWidth){
+          const size = 18;
+          ctx.drawImage(ballImg, ballPt.x - size/2, ballPt.y - size/2, size, size);
+        } else {
+          ctx.beginPath();
+          ctx.fillStyle = '#ffb000';
+          ctx.arc(ballPt.x, ballPt.y, 6, 0, Math.PI*2);
+          ctx.fill();
+        }
+        timeLabel.textContent = t.toFixed(2) + 's';
+      }
+
+      function tick(ts){
+        if (!isPlaying) return;
+        if (lastTime === null) lastTime = ts;
+        const dt = (ts - lastTime) / 1000;
+        lastTime = ts;
+        let t = parseFloat(slider.value) + dt;
+        if (t > data.duration){ t = data.duration; isPlaying = false; }
+        slider.value = t;
+        drawFrame(t);
+        if (isPlaying) requestAnimationFrame(tick);
+      }
+
+      slider.addEventListener('input', ()=>{ drawFrame(parseFloat(slider.value)); });
+      playBtn.addEventListener('click', ()=>{ if (!isPlaying){ isPlaying = true; lastTime = null; requestAnimationFrame(tick);} });
+      pauseBtn.addEventListener('click', ()=>{ isPlaying = false; });
+
+      drawFrame(0);
+      isPlaying = true;
+      requestAnimationFrame(tick);
+    }
+  </script>
+</body>
+</html>
